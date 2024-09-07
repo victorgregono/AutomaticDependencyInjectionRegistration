@@ -62,6 +62,7 @@ namespace AutomaticDependencyInjectionRegistration
             {
                 return ex.Types
                     .Where(t => t != null && t.GetCustomAttribute<RegisterServiceAttribute>() is not null)
+                    .Select(t => t!)
                     .ToArray();
             }
         }
@@ -75,6 +76,8 @@ namespace AutomaticDependencyInjectionRegistration
         private static void RegisterService(IServiceCollection services, Type classType)
         {
             var attribute = classType.GetCustomAttribute<RegisterServiceAttribute>();
+            if (attribute == null) return;
+
             var interfaceType = attribute.InterfaceType ?? classType;
 
             if (!IsServiceRegistered(services, interfaceType, classType))
