@@ -1,5 +1,3 @@
-Aqui está um `README.md` detalhado para a sua DLL, explicando seu uso e fornecendo exemplos:
-
 ```md
 # Automatic Dependency Injection Registration
 
