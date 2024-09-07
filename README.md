@@ -1,241 +1,129 @@
+Aqui está um `README.md` detalhado para a sua DLL, explicando seu uso e fornecendo exemplos:
 
----
+```md
+# Automatic Dependency Injection Registration
 
-# Documentação de `AutomaticDependencyInjectionRegistration`
-
-## Introdução
-
-A DLL `AutomaticDependencyInjectionRegistration` automatiza o registro de serviços de injeção de dependência em aplicações C# usando atributos personalizados. Esta abordagem simplifica a configuração de serviços e reduz a necessidade de registros manuais.
+A **AutomaticDependencyInjectionRegistration** é uma biblioteca que automatiza o processo de registro de serviços na injeção de dependência em projetos .NET, utilizando atributos personalizados. Isso reduz a necessidade de registrar manualmente cada serviço no `IServiceCollection`, simplificando o processo e tornando o código mais limpo e fácil de manter.
 
 ## Instalação
 
-Para utilizar a `AutomaticDependencyInjectionRegistration`, siga estes passos:
+Você pode instalar o pacote diretamente do NuGet executando o seguinte comando no terminal:
 
-1. **Adicionar a DLL ao Projeto**
+```bash
+dotnet add package AutomaticDependencyInjectionRegistration
+```
 
-   Adicione a referência à DLL `AutomaticDependencyInjectionRegistration` no seu projeto. Isso pode ser feito através do NuGet ou adicionando uma referência de projeto diretamente.
+Ou via Visual Studio:
 
-## Código da DLL
+1. Clique com o botão direito no seu projeto.
+2. Selecione **Gerenciar Pacotes NuGet**.
+3. Procure por `AutomaticDependencyInjectionRegistration` e clique em **Instalar**.
 
-Aqui está o código completo da DLL `AutomaticDependencyInjectionRegistration`:
+## Como Funciona
+
+A biblioteca permite que você adicione um atributo personalizado `[RegisterService]` às suas classes, indicando o tempo de vida desejado (Transient, Scoped, Singleton) e a interface que a classe implementa (opcional). Em seguida, você pode chamar o método `AddServicesByAttribute` no `IServiceCollection` para registrar automaticamente todos os serviços.
+
+### Atributo `RegisterService`
+
+O atributo `RegisterServiceAttribute` é usado para marcar classes que devem ser registradas no container de injeção de dependências. Ele aceita dois parâmetros:
+
+- **lifetime**: Define o tempo de vida do serviço (Transient, Scoped ou Singleton).
+- **interfaceType** (opcional): Especifica a interface que a classe implementa. Se não for fornecido, a própria classe será registrada.
+
+### Exemplo de uso
+
+#### 1. Definir os serviços com o atributo `[RegisterService]`
+
+Aqui está um exemplo de como marcar suas classes para registro automático:
 
 ```csharp
+using AutomaticDependencyInjectionRegistration;
 using Microsoft.Extensions.DependencyInjection;
-using System.Collections.Concurrent;
-using System.Reflection;
 
-namespace AutomaticDependencyInjectionRegistration
+// Define um serviço com tempo de vida Transient
+[RegisterService(ServiceLifetime.Transient)]
+public class MeuServico : IMeuServico
 {
-    /// <summary>
-    /// Extensões para registro automático de serviços usando atributos personalizados.
-    /// Esta classe fornece métodos para registrar serviços de injeção de dependência
-    /// com base em um atributo personalizado, automatizando o processo de registro
-    /// e reduzindo a necessidade de configuração manual.
-    /// </summary>
-    public static class AutomaticDependencyInjectionRegistrationExtensions
-    {
-        /// <summary>
-        /// Cache para armazenar tipos de assemblies que já foram processados,
-        /// prevenindo a necessidade de repetição de operações de reflexão.
-        /// </summary>
-        private static readonly ConcurrentDictionary<Assembly, Type[]> CachedTypesWithAttribute = new();
+    public void Executar() => Console.WriteLine("Serviço executado!");
+}
 
-        /// <summary>
-        /// Adiciona serviços ao <see cref="IServiceCollection"/> com base no atributo
-        /// <see cref="RegisterServiceAttribute"/> encontrado nos tipos dos assemblies carregados.
-        /// </summary>
-        /// <param name="services">A coleção de serviços onde os serviços serão registrados.</param>
-        /// <returns>A coleção de serviços atualizada.</returns>
-        /// <exception cref="ArgumentNullException">Se <paramref name="services"/> for nulo.</exception>
-        public static IServiceCollection AddServicesByAttribute(this IServiceCollection services)
-        {
-            ArgumentNullException.ThrowIfNull(services, nameof(services));
-
-            // Obtém todos os assemblies carregados no domínio atual
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-            // Processa cada assembly em paralelo para encontrar e registrar tipos com o atributo
-            Parallel.ForEach(assemblies, assembly =>
-            {
-                // Obtém tipos com o atributo RegisterServiceAttribute do assembly atual
-                var typesWithAttribute = CachedTypesWithAttribute.GetOrAdd(assembly, GetTypesWithAttribute);
-
-                // Registra cada tipo encontrado na coleção de serviços
-                foreach (var type in typesWithAttribute)
-                {
-                    RegisterService(services, type);
-                }
-            });
-
-            return services;
-        }
-
-        /// <summary>
-        /// Obtém todos os tipos de um assembly que possuem o atributo
-        /// <see cref="RegisterServiceAttribute"/>.
-        /// </summary>
-        /// <param name="assembly">O assembly do qual os tipos serão obtidos.</param>
-        /// <returns>Uma matriz de tipos que possuem o atributo RegisterServiceAttribute.</returns>
-        private static Type[] GetTypesWithAttribute(Assembly assembly)
-        {
-            return assembly.GetTypes()
-                .Where(t => t.GetCustomAttribute<RegisterServiceAttribute>() is not null)
-                .ToArray();
-        }
-
-        /// <summary>
-        /// Registra um tipo no <see cref="IServiceCollection"/> com base no atributo
-        /// <see cref="RegisterServiceAttribute"/> encontrado no tipo.
-        /// </summary>
-        /// <param name="services">A coleção de serviços onde o serviço será registrado.</param>
-        /// <param name="type">O tipo a ser registrado.</param>
-        private static void RegisterService(IServiceCollection services, Type type)
-        {
-            // Obtém o atributo RegisterServiceAttribute do tipo
-            var attribute = type.GetCustomAttribute<RegisterServiceAttribute>();
-
-            // Obtém todas as interfaces implementadas pelo tipo
-            var interfaces = type.GetInterfaces();
-
-            // Lógica para encontrar a interface correspondente com base no nome do tipo
-            var serviceType = interfaces.FirstOrDefault(i => i.Name == $"I{type.Name}") ?? type;
-
-            // Adiciona o serviço ao IServiceCollection com o tempo de vida especificado no atributo
-            services.Add(new ServiceDescriptor(serviceType, type, attribute.Lifetime));
-        }
-    }
-
-    /// <summary>
-    /// Atributo personalizado para registrar serviços na injeção de dependência.
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Class, Inherited = false)]
-    public class RegisterServiceAttribute : Attribute
-    {
-        /// <summary>
-        /// Obtém o tempo de vida do serviço especificado no atributo.
-        /// </summary>
-        public ServiceLifetime Lifetime { get; }
-
-        /// <summary>
-        /// Inicializa uma nova instância do atributo RegisterServiceAttribute com o tempo de vida especificado.
-        /// </summary>
-        /// <param name="lifetime">O tempo de vida do serviço.</param>
-        public RegisterServiceAttribute(ServiceLifetime lifetime)
-        {
-            Lifetime = lifetime;
-        }
-    }
+// Define outro serviço, associando a interface manualmente
+[RegisterService(ServiceLifetime.Singleton, typeof(IMeuOutroServico))]
+public class MeuOutroServico : IMeuOutroServico
+{
+    public void Processar() => Console.WriteLine("Outro serviço processado!");
 }
 ```
 
-## Configuração do Projeto
+#### 2. Registrar os serviços no `IServiceCollection`
 
-### Configuração do `Startup`
-
-Modifique a classe `Startup` do seu projeto para usar a DLL e registrar serviços automaticamente:
+Após marcar os serviços com o atributo, basta usar a extensão `AddServicesByAttribute` para registrar automaticamente todos os serviços marcados nos assemblies carregados:
 
 ```csharp
-public class Startup
-{
-    public void ConfigureServices(IServiceCollection services)
+using AutomaticDependencyInjectionRegistration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+var host = Host.CreateDefaultBuilder(args)
+    .ConfigureServices((context, services) =>
     {
-        // Adiciona serviços automaticamente usando atributos personalizados
+        // Adiciona automaticamente todos os serviços marcados com [RegisterService]
         services.AddServicesByAttribute();
+    })
+    .Build();
 
-        // Outros registros de serviços
-        services.AddControllers();
-    }
-
-    // Método Configure não é mostrado aqui, mas você o usaria para configurar o pipeline de requisição
-}
+host.Run();
 ```
 
-## Definição de Serviços
+Com isso, todos os serviços que possuem o atributo `[RegisterService]` serão automaticamente registrados na coleção de serviços.
 
-Os serviços devem ser marcados com o atributo `RegisterServiceAttribute`. Este atributo define o tempo de vida do serviço (por exemplo, Singleton, Scoped ou Transient).
+#### 3. Consumir os serviços injetados
 
-### Exemplo 1: Classe com Interface
+Agora você pode consumir os serviços registrados via injeção de dependência em qualquer classe do seu projeto:
 
 ```csharp
-[RegisterService(ServiceLifetime.Singleton)]
-public class EmailService : IEmailService
+public class MeuCliente
 {
-    public void SendEmail(string recipient, string subject, string body)
+    private readonly IMeuServico _meuServico;
+    private readonly IMeuOutroServico _meuOutroServico;
+
+    public MeuCliente(IMeuServico meuServico, IMeuOutroServico meuOutroServico)
     {
-        // Implementação do envio de e-mail
-        Console.WriteLine($"Email enviado para {recipient} com assunto {subject}.");
+        _meuServico = meuServico;
+        _meuOutroServico = meuOutroServico;
     }
-}
 
-public interface IEmailService
-{
-    void SendEmail(string recipient, string subject, string body);
-}
-```
-
-### Exemplo 2: Classe Sem Interface
-
-```csharp
-[RegisterService(ServiceLifetime.Scoped)]
-public class NotificationService
-{
-    public void Notify(string message)
+    public void ExecutarServicos()
     {
-        // Implementação da notificação
-        Console.WriteLine($"Notificação: {message}");
+        _meuServico.Executar();
+        _meuOutroServico.Processar();
     }
 }
 ```
 
-## Uso dos Serviços
+### Cache de Tipos e Otimização
 
-Depois que os serviços estiverem registrados, você pode injetá-los em seus controladores ou outras classes:
+A biblioteca utiliza um cache (`ConcurrentDictionary`) para armazenar os tipos dos assemblies que já foram processados, evitando que a reflexão seja repetida desnecessariamente e melhorando a performance. Isso garante que cada assembly seja processado apenas uma vez durante a inicialização.
 
-```csharp
-public class HomeController : Controller
-{
-    private readonly IEmailService _emailService;
-    private readonly NotificationService _notificationService;
+### Exceções Tratadas
 
-    public HomeController(IEmailService emailService, NotificationService notificationService)
-    {
-        _emailService = emailService;
-        _notificationService = notificationService;
-    }
+Se algum tipo em um assembly não puder ser carregado (por exemplo, devido a erros de reflexão), a biblioteca trata essas exceções (`ReflectionTypeLoadException`) e apenas os tipos válidos são processados.
 
-    public IActionResult Index()
-    {
-        _emailService.SendEmail("user@example.com", "Assunto", "Corpo do email");
-        _notificationService.Notify("Notificação recebida.");
+## Benefícios
 
-        return View();
-    }
-}
+- **Automação**: Elimina a necessidade de registrar serviços manualmente, simplificando a configuração da injeção de dependências.
+- **Manutenção Reduzida**: Menos código para gerenciar, especialmente em grandes projetos.
+- **Desempenho Otimizado**: Usa cache para evitar processamento redundante de assemblies.
+- **Flexível**: Suporte a diferentes tempos de vida (Transient, Scoped, Singleton) e registro opcional de interfaces específicas.
+
+
+## Licença
+
+Este projeto é licenciado sob a licença MIT - consulte o arquivo [LICENSE](LICENSE) para mais detalhes.
 ```
 
-## Explicação do Código
-
-### `AutomaticDependencyInjectionRegistrationExtensions`
-
-- **`AddServicesByAttribute`**: Estende o `IServiceCollection` para adicionar serviços com base no atributo `RegisterServiceAttribute`. Percorre todos os assemblies carregados, encontra tipos com o atributo e os registra.
-
-- **`GetTypesWithAttribute`**: Obtém todos os tipos de um assembly que possuem o atributo `RegisterServiceAttribute`.
-
-- **`RegisterService`**: Registra um tipo no `IServiceCollection` usando o tempo de vida especificado no atributo. Se o tipo tiver uma interface correspondente, essa interface será usada para o registro.
-
-### `RegisterServiceAttribute`
-
-- **Propriedade `Lifetime`**: Define o tempo de vida do serviço (`ServiceLifetime.Singleton`, `ServiceLifetime.Scoped`, `ServiceLifetime.Transient`).
-
-- **Construtor**: Inicializa o atributo com o tempo de vida especificado.
-
-## Considerações Finais
-
-- **Flexibilidade**: A DLL facilita a manutenção e escalabilidade do projeto, automatizando o registro de serviços e garantindo consistência.
-- **Interface Opcional**: O registro de serviços não requer uma interface; serviços sem interfaces também podem ser registrados e injetados.
-
-Com essa abordagem, você pode simplificar a configuração de injeção de dependência e focar no desenvolvimento das funcionalidades da sua aplicação.
-
---- 
-
-Esta documentação fornece uma visão geral completa sobre como usar a DLL `AutomaticDependencyInjectionRegistration` em projetos C#. 
+### Pontos-Chave:
+- Explicação sobre o propósito e funcionamento do atributo `RegisterServiceAttribute`.
+- Exemplos claros de como usar a DLL no código.
+- Instruções simples sobre como instalar e utilizar a biblioteca em aplicações .NET.
+- Descrição de otimizações internas, como o uso de cache para melhorar a performance.
